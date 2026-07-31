@@ -1,0 +1,131 @@
+/* 聚合拾遗 — Design tokens & font face declarations */
+
+@font-face {
+  font-family: 'Ma Shan Zheng';
+  src: url('/fonts/ma_shan_zheng_regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Dinglie Song';
+  src: url('/fonts/dinglie_song_typeface.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'San Ji XingKai';
+  src: url('/fonts/san_ji_xing_kai_jian_ti_cu.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallback web-safe Chinese fonts */
+:root {
+  --font-title: 'Ma Shan Zheng', 'KaiTi', 'STKaiti', serif;
+  --font-body: 'Dinglie Song', 'Noto Serif SC', 'SimSun', 'STSong', serif;
+  --font-heading: 'San Ji XingKai', 'KaiTi', 'STKaiti', serif;
+  --font-ui: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  --color-canvas: #F5F0E8;
+  --color-surface: #EDE6D6;
+  --color-surface-hover: #E3D9C3;
+  --color-overlay: rgba(30, 25, 20, 0.55);
+
+  --color-text-primary: #2C2416;
+  --color-text-secondary: #6B5E50;
+  --color-text-muted: #9A8B78;
+
+  --color-accent: #C23B22;
+  --color-accent-hover: #A6301C;
+  --color-accent-light: #F5D6CB;
+  --color-stamp: #B83220;
+
+  --color-border-light: #D4C9B3;
+  --color-border-medium: #B8A88A;
+  --color-border-dark: #8B7D6B;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-medium);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-dark);
+}
+
+/* Container query support for responsive layout */
+.app-layout {
+  container-type: inline-size;
+  container-name: app;
+  height: 100%;
+  display: flex;
+}
+
+@container app (max-width: 479px) {
+  .pane-container { width: 100%; }
+  .pane-secondary { display: none; }
+}
+
+@container app (min-width: 480px) {
+  .pane-container { width: 360px; }
+  .pane-secondary { flex: 1; }
+}
+
+@container app (min-width: 800px) {
+  .pane-container { width: 380px; }
+  .pane-trio { display: flex; }
+}
+
+.topic-card-actions { opacity: 0; }
+
+/* 水墨夜读 — dark mode */
+html.dark {
+  --color-canvas: #1A1510;
+  --color-surface: #2C2416;
+  --color-surface-hover: #3A3020;
+  --color-overlay: rgba(10, 8, 5, 0.75);
+
+  --color-text-primary: #D4C9B3;
+  --color-text-secondary: #8B7D6B;
+  --color-text-muted: #6B5E50;
+
+  --color-accent: #D4634A;
+  --color-accent-hover: #E07B65;
+  --color-accent-light: rgba(212, 99, 74, 0.15);
+  --color-stamp: #C05A40;
+
+  --color-border-light: #3A3020;
+  --color-border-medium: #5A4C38;
+  --color-border-dark: #7A6850;
+}
+/* Table rows dark */
+html.dark th, html.dark td { border-color: var(--color-border-medium); }
+html.dark th { background: var(--color-surface); }
+html.dark select { background: var(--color-surface); color: var(--color-text-primary); }
+html.dark input, html.dark textarea { background: var(--color-surface); color: var(--color-text-primary); border-color: var(--color-border-medium); }

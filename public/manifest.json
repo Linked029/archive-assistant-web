@@ -1,0 +1,16 @@
+﻿{
+  "name": "聚合拾遗",
+  "short_name": "聚合拾遗",
+  "description": "个人知识归档工具 - 六部古风分类",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F0E8",
+  "theme_color": "#C23B22",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
