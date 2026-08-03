@@ -1,7 +1,8 @@
 ﻿import { create } from 'zustand';
 import type { AiEngineSettings, AiEnginePreset } from '../models/ai-settings';
 import { DEFAULT_AI_SETTINGS } from '../models/ai-settings';
-import { db } from '../lib/db';
+import { loadAiSettings, loadAiPresets, saveAiPresets } from '../lib/db';
+import { api } from '../lib/api';
 
 interface AiState {
   settings: AiEngineSettings;
@@ -22,10 +23,10 @@ export const useAiStore = create<AiState>()((set, get) => ({
   loaded: false,
   actions: {
     initialize: async () => {
-      const saved = await db.aiSettings.toArray();
-      const presets = await db.aiPresets.toArray();
+      const saved = await loadAiSettings();
+      const presets = await loadAiPresets();
       set({
-        settings: saved[0] ?? DEFAULT_AI_SETTINGS,
+        settings: saved ?? DEFAULT_AI_SETTINGS,
         presets,
         loaded: true,
       });
@@ -34,22 +35,24 @@ export const useAiStore = create<AiState>()((set, get) => ({
     updateSettings: async (partial) => {
       const next = { ...get().settings, ...partial };
       set({ settings: next });
-      await db.aiSettings.put(next);
+      await api.updateAiSettings(next);
     },
 
     replaceSettings: async (s) => {
       set({ settings: s });
-      await db.aiSettings.put(s);
+      await api.updateAiSettings(s);
     },
 
     addPreset: async (p) => {
-      await db.aiPresets.put(p);
-      set({ presets: [...get().presets, p] });
+      const presets = [...get().presets, p];
+      await saveAiPresets(presets);
+      set({ presets });
     },
 
     removePreset: async (name) => {
-      await db.aiPresets.delete(name);
-      set({ presets: get().presets.filter((p) => p.name !== name) });
+      const presets = get().presets.filter((p) => p.name !== name);
+      await saveAiPresets(presets);
+      set({ presets });
     },
   },
 }));

@@ -1,130 +1,107 @@
-import Dexie, { type EntityTable } from 'dexie';
-import type { Topic } from '../models/topic';
-import type { KnowledgeItem } from '../models/item';
-import type { AiEngineSettings, AiEnginePreset } from '../models/ai-settings';
+import type { Topic } from "../models/topic";
+import type { KnowledgeItem } from "../models/item";
+import type { AiEngineSettings, AiEnginePreset } from "../models/ai-settings";
+import { api, type ApiItem } from "./api";
 
-export class ArchiveAssistantDB extends Dexie {
-  topics!: EntityTable<Topic, 'id'>;
-  items!: EntityTable<KnowledgeItem, 'id'>;
-  aiSettings!: EntityTable<AiEngineSettings, 'engineType'>;
-  aiPresets!: EntityTable<AiEnginePreset, 'name'>;
-  snapshots!: EntityTable<{ id: number; data: string; createdAt: number }, 'id'>;
-
-  constructor() {
-    super('ArchiveAssistant');
-    this.version(1).stores({
-      topics: 'id, order, updatedAtEpochMillis',
-      items: 'id, topicId, contentType, createdAtEpochMillis',
-      aiSettings: 'engineType',
-      aiPresets: 'name',
-      snapshots: '++id, createdAt',
-    });
-  }
+export function apiItemToKnowledgeItem(item: ApiItem): KnowledgeItem {
+  return {
+    id: item.id,
+    topicId: item.ministryId,
+    contentType: item.contentType as KnowledgeItem["contentType"],
+    title: item.title,
+    summary: item.summary,
+    fullText: item.fullText,
+    sourceUrl: item.sourceUrl || undefined,
+    documentFormat: item.documentFormat as KnowledgeItem["documentFormat"] | undefined,
+    fileName: item.fileName || undefined,
+    createdAtEpochMillis: new Date(item.createdAt).getTime(),
+  };
 }
 
-export const db = new ArchiveAssistantDB();
-
 export async function loadAllTopics(): Promise<Topic[]> {
-  const topics = await db.topics.toArray();
-  return topics.sort((a, b) => a.order - b.order);
+  const ministries = await api.listMinistries();
+  return ministries.map((m) => ({
+    id: m.id,
+    title: m.title,
+    iconName: m.icon || "folder-spark",
+    iconColor: m.color || "#8B7D6B",
+    updatedAtEpochMillis: Date.now(),
+    order: m.order,
+  }));
 }
 
 export async function saveTopic(topic: Topic): Promise<void> {
-  await db.topics.put(topic);
-}
-
-export async function deleteTopic(id: string): Promise<void> {
-  await db.topics.delete(id);
-}
-
-export async function loadItemsByTopic(topicId: string): Promise<KnowledgeItem[]> {
-  return db.items.where('topicId').equals(topicId).toArray();
-}
-
-export async function loadAllItems(): Promise<KnowledgeItem[]> {
-  return db.items.toArray();
-}
-
-export async function saveItem(item: KnowledgeItem): Promise<void> {
-  await db.items.put(item);
-}
-
-export async function deleteItem(id: string): Promise<void> {
-  await db.items.delete(id);
-}
-
-export async function saveAiSettings(settings: AiEngineSettings): Promise<void> {
-  await db.aiSettings.put(settings);
-}
-
-export async function loadAiSettings(): Promise<AiEngineSettings | undefined> {
-  const all = await db.aiSettings.toArray();
-  return all[0];
-}
-
-export async function createSnapshot(data: string): Promise<void> {
-  const count = await db.snapshots.count();
-  if (count >= 10) {
-    const oldest = await db.snapshots.orderBy('id').first();
-    if (oldest) await db.snapshots.delete(oldest.id);
-  }
-  await db.snapshots.add({ id: 0, data, createdAt: Date.now() });
-}
-
-export async function exportAllData(): Promise<string> {
-  const topics = await db.topics.toArray();
-  const items = await db.items.toArray();
-  const settings = await loadAiSettings();
-  return JSON.stringify({ topics, items, settings, exportedAt: new Date().toISOString() }, null, 2);
-}
-
-export async function importAllData(json: string): Promise<void> {
-  const data = JSON.parse(json) as {
-    topics?: Topic[];
-    items?: KnowledgeItem[];
-    settings?: AiEngineSettings;
-  };
-  await db.transaction('rw', [db.topics, db.items, db.aiSettings], async () => {
-    if (data.topics) {
-      await db.topics.clear();
-      await db.topics.bulkAdd(data.topics);
-    }
-    if (data.items) {
-      await db.items.clear();
-      await db.items.bulkAdd(data.items);
-    }
-    if (data.settings) {
-      await db.aiSettings.clear();
-      await db.aiSettings.add(data.settings);
-    }
+  await api.updateMinistry(topic.id, {
+    title: topic.title,
+    icon: topic.iconName,
+    color: topic.iconColor,
   });
 }
 
+export async function deleteTopic(id: string): Promise<void> {
+  await api.deleteMinistry(id);
+}
+
+export async function loadItemsByTopic(topicId: string): Promise<KnowledgeItem[]> {
+  const items = await api.listItems({
+    ministryId: topicId,
+    status: "archived,read,reviewing,mastered",
+  });
+  return items.map(apiItemToKnowledgeItem);
+}
+
+export async function loadAllItems(): Promise<KnowledgeItem[]> {
+  const items = await api.listItems({ status: "archived,read,reviewing,mastered" });
+  return items.map(apiItemToKnowledgeItem);
+}
+
+export async function saveItem(item: KnowledgeItem): Promise<void> {
+  await api.updateItem(item.id, {
+    ministryId: item.topicId,
+    title: item.title,
+    summary: item.summary,
+    fullText: item.fullText,
+    sourceUrl: item.sourceUrl,
+    contentType: item.contentType,
+    documentFormat: item.documentFormat,
+    fileName: item.fileName,
+  });
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  await api.deleteItem(id);
+}
+
+export async function saveAiSettings(settings: AiEngineSettings): Promise<void> {
+  await api.updateAiSettings(settings);
+}
+
+export async function loadAiSettings(): Promise<AiEngineSettings | undefined> {
+  const settings = await api.getSettings();
+  return settings.ai;
+}
+
+export async function loadAiPresets(): Promise<AiEnginePreset[]> {
+  const settings = await api.getSettings();
+  return settings.aiPresets as AiEnginePreset[];
+}
+
+export async function saveAiPresets(presets: AiEnginePreset[]): Promise<void> {
+  await api.saveAiPresets(presets);
+}
+
+export async function createSnapshot(): Promise<void> {
+  // SQLite 本地库由服务端持久化，快照由服务端维护，无需浏览器写入。
+}
+
+export async function exportAllData(): Promise<string> {
+  return api.exportJson();
+}
+
+export async function importAllData(json: string): Promise<void> {
+  await api.importJson(JSON.parse(json));
+}
+
 export async function exportItemsAsMarkdown(): Promise<string> {
-  const items = await db.items.toArray();
-  const topics = await db.topics.toArray();
-  const topicMap = new Map(topics.map((t) => [t.id, t.title]));
-
-  let output = "";
-  for (const item of items) {
-    const topicTitle = topicMap.get(item.topicId) || "未分类";
-    const date = new Date(item.createdAtEpochMillis).toISOString().slice(0, 10);
-    const frontmatter = [
-      "---",
-      `title: "${item.title.replace(/"/g, '\\"')}"`,
-      `topic: "${topicTitle}"`,
-      `type: ${item.contentType}`,
-      `date: ${date}`,
-      item.sourceUrl ? `source: ${item.sourceUrl}` : "",
-      item.fileName ? `file: ${item.fileName}` : "",
-      `id: ${item.id}`,
-      "---",
-    ].filter(Boolean).join("\n");
-
-    output += frontmatter + "\n\n";
-    if (item.summary) output += `> ${item.summary}\n\n`;
-    if (item.fullText) output += item.fullText + "\n\n";
-    output += "---\n\n";
-  }
-  return output;
+  return api.exportMarkdown();
 }

@@ -1,8 +1,7 @@
 ﻿﻿import { create } from 'zustand';
 import type { Topic } from '../models/topic';
-import { SIX_MINISTRIES } from '../models/topic';
 import { loadAllTopics, saveTopic, deleteTopic as deleteTopicDb } from '../lib/db';
-import { db } from '../lib/db';
+import { api } from '../lib/api';
 
 interface TopicState {
   topics: Topic[];
@@ -22,26 +21,23 @@ export const useTopicStore = create<TopicState>()((set, get) => ({
   actions: {
     initialize: async () => {
       const existing = await loadAllTopics();
-      if (existing.length > 0) {
-        set({ topics: existing, loaded: true });
-        return;
-      }
-      await db.topics.bulkAdd(SIX_MINISTRIES);
-      set({ topics: SIX_MINISTRIES, loaded: true });
+      set({ topics: existing, loaded: true });
     },
 
     addTopic: async (title) => {
-      const { topics } = get();
-      const maxOrder = topics.reduce((m, t) => Math.max(m, t.order), -1);
-      const topic: Topic = {
-        id: `custom-${Date.now()}`,
+      const created = await api.createMinistry({
         title,
-        iconName: 'folder-spark',
-        iconColor: '#8B7D6B',
+        icon: 'folder-spark',
+        color: '#8B7D6B',
+      });
+      const topic: Topic = {
+        id: created.id,
+        title: created.title,
+        iconName: created.icon,
+        iconColor: created.color,
         updatedAtEpochMillis: Date.now(),
-        order: maxOrder + 1,
+        order: created.order,
       };
-      await saveTopic(topic);
       set({ topics: [...get().topics, topic] });
       return topic;
     },

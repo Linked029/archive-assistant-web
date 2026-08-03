@@ -1,8 +1,9 @@
 ﻿﻿import { create } from 'zustand';
 import type { KnowledgeItem } from '../models/item';
-import { ContentType, generateId } from '../models/item';
+import { ContentType } from '../models/item';
 import type { DocumentFormat } from '../models/item';
-import { loadAllItems, saveItem, deleteItem as deleteItemDb, createSnapshot } from '../lib/db';
+import { loadAllItems, apiItemToKnowledgeItem } from '../lib/db';
+import { api } from '../lib/api';
 import { resolveTopicId } from '../models/topic';
 
 interface AddItemInput {
@@ -38,9 +39,8 @@ export const useItemStore = create<ItemState>()((set, get) => ({
     },
 
     addItem: async (input) => {
-      const item: KnowledgeItem = {
-        id: generateId(),
-        topicId: resolveTopicId(input.topicId),
+      const created = await api.createItem({
+        ministryId: resolveTopicId(input.topicId),
         contentType: input.contentType,
         title: input.title,
         summary: input.summary,
@@ -48,24 +48,29 @@ export const useItemStore = create<ItemState>()((set, get) => ({
         sourceUrl: input.sourceUrl,
         documentFormat: input.documentFormat as DocumentFormat | undefined,
         fileName: input.fileName,
-        createdAtEpochMillis: Date.now(),
-      };
+      });
+      const item = apiItemToKnowledgeItem(created);
       set({ items: [...get().items, item] });
-      saveItem(item).catch(console.error);
-      createSnapshot(JSON.stringify({ type: 'add', item })).catch(() => {});
       return item;
     },
 
     updateItem: async (item) => {
-      set({ items: get().items.map((i) => (i.id === item.id ? item : i)) });
-      saveItem(item).catch(console.error);
-      createSnapshot(JSON.stringify({ type: 'update', item })).catch(() => {});
+      const updated = await api.updateItem(item.id, {
+        ministryId: item.topicId,
+        title: item.title,
+        summary: item.summary,
+        fullText: item.fullText,
+        sourceUrl: item.sourceUrl,
+        contentType: item.contentType,
+        documentFormat: item.documentFormat,
+        fileName: item.fileName,
+      });
+      set({ items: get().items.map((i) => (i.id === item.id ? apiItemToKnowledgeItem(updated) : i)) });
     },
 
     removeItem: async (id) => {
+      await api.deleteItem(id);
       set({ items: get().items.filter((i) => i.id !== id) });
-      deleteItemDb(id).catch(console.error);
-      createSnapshot(JSON.stringify({ type: 'delete', id })).catch(() => {});
     },
 
     refreshFromDb: async () => {
