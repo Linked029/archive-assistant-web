@@ -175,23 +175,21 @@ export function AddItemDialog() {
     setAiLoading(true);
     setAiError(null);
 
-    let webContext = undefined;
     if (sourceUrl.trim()) {
       setAiError("正在抓取网页…");
       const result = await fetchWebPage(sourceUrl.trim());
       if (result.success) {
-        webContext = result.context;
-        if (!fullText.trim()) setFullText(result.context.bodyText.slice(0, 800));
-        if (!title.trim()) setTitle(result.context.title);
+        setTitle(result.context.title.slice(0, 28));
+        setSummary((result.context.description || result.context.bodyText).slice(0, 96));
+        setFullText(result.context.bodyText.slice(0, 10000));
+      } else {
+        setAiError(result.error);
       }
-      setAiError(null);
+      setAiLoading(false);
+      return;
     }
 
-    const result = await smartSummarize({
-      rawText: text,
-      sourceUrl: sourceUrl.trim() || undefined,
-      fetchedWebContext: webContext,
-    });
+    const result = await smartSummarize({ rawText: text });
 
     setAiLoading(false);
     if (result.success) {
