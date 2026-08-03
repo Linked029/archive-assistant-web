@@ -1,6 +1,18 @@
 ﻿﻿import { create } from 'zustand';
 
-export type AppPane = 'topics' | 'memorial' | 'detail' | 'settings' | 'manage' | 'card-detail' | 'article-reader';
+export type AppPane =
+  | 'topics'
+  | 'memorial'
+  | 'detail'
+  | 'settings'
+  | 'manage'
+  | 'card-detail'
+  | 'article-reader'
+  | 'dashboard'
+  | 'approval'
+  | 'sources'
+  | 'preferences'
+  | 'review';
 
 interface UiState {
   selectedPane: AppPane;
@@ -46,7 +58,7 @@ interface UiState {
 }
 
 const initial = {
-  selectedPane: 'topics' as AppPane,
+  selectedPane: 'dashboard' as AppPane,
   selectedTopicId: null as string | null,
   homeSearchQuery: '',
   activeDetailFilter: 'ALL',

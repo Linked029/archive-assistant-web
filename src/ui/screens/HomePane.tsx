@@ -1,4 +1,5 @@
-import { Plus, Settings, Pencil, Trash2, Folder } from "lucide-react";
+import { Plus, Settings, Pencil, Trash2, Folder, LayoutDashboard, Stamp, Rss, SlidersHorizontal, BookOpen } from "lucide-react";
+import { useEffect, useState } from "react";
 import { PaneContainer, PaneContent } from "../layout/PaneContainer";
 import { PaneHeader } from "../layout/PaneHeader";
 import { useUiStore } from "../../store/ui-store";
@@ -7,19 +8,27 @@ import { useItemStore, getItemsByTopic } from "../../store/item-store";
 import { searchItems } from "../../lib/search";
 import { colors, fonts } from "../theme/imperial-palette";
 import type { Topic } from "../../models/topic";
+import { SIX_MINISTRIES } from "../../models/topic";
+import { api } from "../../lib/api";
 
 export function HomePane() {
   const { homeSearchQuery, actions: uiActions } = useUiStore();
+  const selectedPane = useUiStore((s) => s.selectedPane);
   const topics = useTopicStore((s) => s.topics);
   const items = useItemStore((s) => s.items);
   const itemsByTopic = items.length > 0 ? getItemsByTopic(items) : {};
 
-  const recentItems = items.length > 0
-    ? items
-        .filter((i) => i.title)
-        .sort((a, b) => b.createdAtEpochMillis - a.createdAtEpochMillis)
-        .slice(0, 6)
-    : [];
+  const [pendingCount, setPendingCount] = useState(0);
+  const [dueCount, setDueCount] = useState(0);
+
+  useEffect(() => {
+    api.dashboard()
+      .then((d) => setPendingCount(d.today.pending))
+      .catch(() => {});
+    api.getLearningStats()
+      .then((s) => setDueCount(s.dueToday))
+      .catch(() => {});
+  }, []);
 
   const searchResults = homeSearchQuery.trim() ? searchItems(items, homeSearchQuery) : [];
   const matchedTopicIds = new Set(searchResults.map((i) => i.topicId));
@@ -43,42 +52,13 @@ export function HomePane() {
           </div>
         }
       />
-      {recentItems.length > 0 && !homeSearchQuery.trim() && (
-        <div style={{ padding: "0 16px 12px", borderBottom: `1px solid ${colors.border.light}` }}>
-          <div style={{ fontFamily: fonts.heading, fontSize: "14px", color: colors.text.secondary, marginBottom: "8px" }}>
-            待办奏折
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            {recentItems.map((item) => {
-              const topic = topics.find((t) => t.id === item.topicId);
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => { uiActions.openReadingItem(item.id); uiActions.navigateTo("detail", item.topicId); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "8px",
-                    padding: "6px 10px", borderRadius: "6px",
-                    cursor: "pointer", transition: "background 0.1s ease",
-                    border: `1px solid transparent`,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = colors.bg.surfaceHover; e.currentTarget.style.borderColor = colors.border.light; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-                >
-                  <span style={{ fontSize: "12px", color: (colors.ministry as any)[item.topicId] || colors.text.muted, minWidth: "40px" }}>
-                    {topic?.title || "未知"}
-                  </span>
-                  <span style={{ flex: 1, fontSize: "13px", color: colors.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.title}
-                  </span>
-                  <span style={{ fontSize: "11px", color: colors.text.muted }}>
-                    {new Date(item.createdAtEpochMillis).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <div style={{ display: "flex", gap: "6px", padding: "8px 12px", borderBottom: `1px solid ${colors.border.light}` }}>
+        <NavItem active={selectedPane === "dashboard"} label="工作台" onClick={() => uiActions.navigateTo("dashboard")} icon={<LayoutDashboard size={14} />} />
+        <NavItem active={selectedPane === "approval"} label="门下省" badge={pendingCount} onClick={() => uiActions.navigateTo("approval")} icon={<Stamp size={14} />} />
+        <NavItem active={selectedPane === "review"} label="复习" badge={dueCount} onClick={() => uiActions.navigateTo("review")} icon={<BookOpen size={14} />} />
+        <NavItem active={selectedPane === "sources"} label="信息源" onClick={() => uiActions.navigateTo("sources")} icon={<Rss size={14} />} />
+        <NavItem active={selectedPane === "preferences"} label="偏好卡" onClick={() => uiActions.navigateTo("preferences")} icon={<SlidersHorizontal size={14} />} />
+      </div>
       <div style={{ padding: "8px 16px" }}>
         <input
           type="text"
@@ -118,7 +98,7 @@ export function HomePane() {
                 itemCount={(itemsByTopic[topic.id] || []).length}
                 onClick={() => uiActions.navigateTo("detail", topic.id)}
                 onEdit={() => uiActions.openRenameTopicDialog(topic.id)}
-                onDelete={() => uiActions.confirmDeleteTopic(topic.id)}
+                onDelete={SIX_MINISTRIES.some((t) => t.id === topic.id) ? undefined : () => uiActions.confirmDeleteTopic(topic.id)}
               />
             ))}
           </div>
@@ -150,7 +130,7 @@ export function HomePane() {
 }
 
 function TopicCard({ topic, itemCount, onClick, onEdit, onDelete }: {
-  topic: Topic; itemCount: number; onClick: () => void; onEdit: () => void; onDelete: () => void;
+  topic: Topic; itemCount: number; onClick: () => void; onEdit: () => void; onDelete?: () => void;
 }) {
   return (
     <div
@@ -197,9 +177,55 @@ function TopicCard({ topic, itemCount, onClick, onEdit, onDelete }: {
         onMouseLeave={(e) => e.currentTarget.style.opacity = "0"}
       >
         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={miniBtnStyle} title="重命名"><Pencil size={12} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} style={miniBtnStyle} title="删除"><Trash2 size={12} /></button>
+        {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }} style={miniBtnStyle} title="删除"><Trash2 size={12} /></button>}
       </div>
     </div>
+  );
+}
+
+function NavItem({ active, label, badge, onClick, icon }: {
+  active: boolean;
+  label: string;
+  badge?: number;
+  onClick: () => void;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "5px",
+        padding: "6px 10px",
+        borderRadius: "6px",
+        border: `1px solid ${active ? colors.accent.primary : colors.border.light}`,
+        background: active ? colors.accent.light : colors.bg.canvas,
+        color: active ? colors.accent.primary : colors.text.secondary,
+        cursor: "pointer",
+        fontSize: "12px",
+        fontFamily: fonts.ui,
+        position: "relative",
+      }}
+    >
+      {icon} {label}
+      {badge !== undefined && badge > 0 && (
+        <span style={{
+          minWidth: "16px",
+          height: "16px",
+          padding: "0 4px",
+          borderRadius: "8px",
+          background: colors.accent.primary,
+          color: "#fff",
+          fontSize: "10px",
+          lineHeight: "16px",
+          textAlign: "center",
+          fontFamily: fonts.ui,
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
   );
 }
 

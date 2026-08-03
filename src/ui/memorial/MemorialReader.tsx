@@ -1,7 +1,8 @@
 ﻿import { useRef, useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
-import { Stamp, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Stamp, X, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import type { KnowledgeItem } from "../../models/item";
 import { colors, fonts } from "../theme/imperial-palette";
+import { api, type ApiAnnotation, type ApiItemStatus } from "../../lib/api";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
 import remarkGfm from "remark-gfm";
@@ -125,6 +126,10 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
   const [viewMode, setViewMode] = useState<"canvas" | "markdown">("canvas");
   const [fontSize, setFontSize] = useState(16);
   const [stampPhase, setStampPhase] = useState<"hidden" | "pressing" | "fading" | "visible">("hidden");
+  const [annotations, setAnnotations] = useState<ApiAnnotation[]>([]);
+  const [annotationText, setAnnotationText] = useState("");
+  const [itemStatus, setItemStatus] = useState<ApiItemStatus | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const pages = useMemo(() => splitPages(item.fullText || item.summary || item.title), [item]);
   const totalPages = pages.length;
@@ -318,10 +323,51 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [page, animating]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.listAnnotations(item.id).then((list) => { if (!cancelled) setAnnotations(list); }).catch(() => {});
+    api.getItem(item.id).then((it) => { if (!cancelled) setItemStatus(it.status); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [item.id]);
+
+  const markRead = async () => {
+    try {
+      const it = await api.markItemRead(item.id);
+      setItemStatus(it.status);
+      setNotice("已标记已读，明日进入复习");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "标记失败");
+    }
+    setTimeout(() => setNotice(null), 2500);
+  };
+
+  const addAnnotation = async () => {
+    const text = annotationText.trim();
+    if (!text) return;
+    try {
+      const created = await api.createAnnotation(item.id, text);
+      setAnnotations((prev) => [created, ...prev]);
+      setAnnotationText("");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "批注保存失败");
+    }
+  };
+
+  const removeAnnotation = async (id: string) => {
+    try {
+      await api.deleteAnnotation(id);
+      setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "批注删除失败");
+    }
+  };
+
+  const isRead = itemStatus === "read" || itemStatus === "reviewing" || itemStatus === "mastered";
+
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      display: "flex", flexDirection: "column",
+      display: "flex", flexDirection: "row", gap: "16px",
       alignItems: "center", justifyContent: "center",
       background: "rgba(20,15,10,0.65)",
       fontFamily: fonts.ui,
@@ -449,6 +495,69 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
           color: colors.text.muted, padding: "6px", borderRadius: "4px",
         }}><X size={18} /></button>
       </div>
+
+      <div style={{
+        width: "260px",
+        maxHeight: "640px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        background: "#F5F0E8",
+        borderRadius: "6px",
+        padding: "14px",
+        boxSizing: "border-box",
+        boxShadow: "0 12px 60px rgba(20,15,10,0.5), 0 0 0 1px rgba(20,15,10,0.1)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontFamily: fonts.heading, fontSize: "15px", color: colors.text.primary }}>批注 · 批红</span>
+          <span style={{ fontSize: "11px", color: isRead ? "#3A6B47" : colors.text.muted }}>{isRead ? "已读" : "未读"}</span>
+        </div>
+        <button
+          onClick={markRead}
+          disabled={isRead}
+          style={{
+            ...sideButtonStyle,
+            background: isRead ? colors.border.medium : colors.accent.primary,
+            cursor: isRead ? "not-allowed" : "pointer",
+          }}
+        >
+          {isRead ? "已标记已读" : "标记已读"}
+        </button>
+        <textarea
+          value={annotationText}
+          onChange={(e) => setAnnotationText(e.target.value)}
+          placeholder="写下你的想法…"
+          rows={3}
+          style={{ ...sideInputStyle, resize: "vertical" }}
+        />
+        <button onClick={addAnnotation} style={{ ...sideButtonStyle, background: "#4A7C59" }}>
+          <Plus size={13} /> 添加批注
+        </button>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px", minHeight: "80px" }}>
+          {annotations.length === 0 ? (
+            <p style={{ fontSize: "12px", color: colors.text.muted, margin: 0 }}>暂无批注</p>
+          ) : (
+            annotations.map((a) => (
+              <div key={a.id} style={{
+                padding: "8px",
+                background: colors.bg.canvas,
+                border: `1px solid ${colors.border.light}`,
+                borderRadius: "6px",
+                fontSize: "12px",
+                color: colors.text.primary,
+              }}>
+                <div style={{ lineHeight: 1.5, wordBreak: "break-word" }}>{a.text}</div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                  <button onClick={() => removeAnnotation(a.id)} style={miniBtnStyle} title="删除批注">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {notice && <div style={{ fontSize: "12px", color: colors.accent.primary }}>{notice}</div>}
+      </div>
     </div>
   );
 }
@@ -471,4 +580,39 @@ const navBtn: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "4px",
+};
+
+const sideButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "4px",
+  padding: "7px 10px",
+  border: "none",
+  borderRadius: "6px",
+  color: "#fff",
+  fontFamily: fonts.ui,
+  fontSize: "12px",
+};
+
+const sideInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px",
+  boxSizing: "border-box",
+  fontFamily: fonts.ui,
+  fontSize: "12px",
+  border: `1px solid ${colors.border.light}`,
+  borderRadius: "6px",
+  background: colors.bg.canvas,
+  color: colors.text.primary,
+};
+
+const miniBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  color: colors.text.muted,
+  padding: "2px",
+  display: "flex",
+  alignItems: "center",
 };
