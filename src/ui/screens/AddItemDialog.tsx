@@ -4,7 +4,8 @@ import { useUiStore } from "../../store/ui-store";
 import { useItemStore } from "../../store/item-store";
 import { useTopicStore } from "../../store/topic-store";
 import { ContentType, CONTENT_TYPE_LABELS } from "../../models/item";
-import { smartSummarize, fetchWebPage } from "../../lib/ai/classifier";
+import { smartSummarize } from "../../lib/ai/classifier";
+import { fetchWebPage } from "../../lib/fetch-web";
 import { Sparkles } from "lucide-react";
 import { colors, fonts } from "../theme/imperial-palette";
 

@@ -212,6 +212,11 @@ export const api = {
       `/sources/${id}/test`,
       { method: "POST" },
     ),
+  fetchWeb: (url: string) =>
+    request<{ ok: boolean; title: string; summary: string; fullText: string; sourceUrl: string | null }>(
+      "/fetch-web",
+      { method: "POST", body: JSON.stringify({ url }) },
+    ),
 
   getPreference: (ministryId: string) => request<ApiPreference>(`/preferences/${ministryId}`),
   updatePreference: (ministryId: string, patch: Partial<ApiPreference>) =>
