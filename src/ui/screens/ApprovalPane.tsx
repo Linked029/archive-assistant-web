@@ -11,6 +11,9 @@ export function ApprovalPane() {
   const [threshold, setThreshold] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionTarget, setActionTarget] = useState<{ itemId: string; type: "reject" | "redraft" } | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const load = async () => {
     try {
@@ -37,27 +40,45 @@ export function ApprovalPane() {
   };
 
   const approve = async (item: ApiItem) => {
-    await api.approveItem(item.id);
-    await refresh();
-    setMessage(`已准奏：${item.title}`);
+    try {
+      setSubmitting(true);
+      await api.approveItem(item.id);
+      await refresh();
+      setMessage(`已准奏：${item.title}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "准奏失败");
+    } finally {
+      setSubmitting(false);
+    }
     setTimeout(() => setMessage(null), 2000);
   };
 
-  const reject = async (item: ApiItem) => {
-    const reason = window.prompt(`驳回原因（可选）：`, "");
-    if (reason === null) return;
-    await api.rejectItem(item.id, reason.trim() || undefined);
-    await refresh();
-    setMessage(`已驳回：${item.title}`);
-    setTimeout(() => setMessage(null), 2000);
+  const openAction = (item: ApiItem, type: "reject" | "redraft") => {
+    setActionTarget({ itemId: item.id, type });
+    setActionReason("");
   };
 
-  const redraft = async (item: ApiItem) => {
-    const reason = window.prompt(`打回重拟原因（可选）：`, "");
-    if (reason === null) return;
-    await api.redraftItem(item.id, reason.trim() || undefined);
-    await refresh();
-    setMessage(`已打回重拟：${item.title}`);
+  const confirmAction = async () => {
+    if (!actionTarget) return;
+    const { itemId, type } = actionTarget;
+    const target = items.find((i) => i.id === itemId);
+    try {
+      setSubmitting(true);
+      const reason = actionReason.trim() || undefined;
+      if (type === "reject") {
+        await api.rejectItem(itemId, reason);
+      } else {
+        await api.redraftItem(itemId, reason);
+      }
+      await refresh();
+      setActionTarget(null);
+      setActionReason("");
+      setMessage(type === "reject" ? `已驳回：${target?.title || ""}` : `已打回重拟：${target?.title || ""}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setSubmitting(false);
+    }
     setTimeout(() => setMessage(null), 2000);
   };
 
@@ -150,16 +171,38 @@ export function ApprovalPane() {
                   </a>
                 )}
                 <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
-                  <button onClick={() => approve(item)} style={{ ...actionButtonStyle, background: "#4A7C59" }}>
+                  <button onClick={() => approve(item)} disabled={submitting} style={{ ...actionButtonStyle, background: "#4A7C59" }}>
                     <Check size={14} /> 准奏
                   </button>
-                  <button onClick={() => redraft(item)} style={{ ...actionButtonStyle, background: colors.border.dark }}>
+                  <button onClick={() => openAction(item, "redraft")} disabled={submitting} style={{ ...actionButtonStyle, background: colors.border.dark }}>
                     <RotateCcw size={14} /> 打回
                   </button>
-                  <button onClick={() => reject(item)} style={{ ...actionButtonStyle, background: colors.accent.primary }}>
+                  <button onClick={() => openAction(item, "reject")} disabled={submitting} style={{ ...actionButtonStyle, background: colors.accent.primary }}>
                     <X size={14} /> 驳回
                   </button>
                 </div>
+                {actionTarget?.itemId === item.id && (
+                  <div style={actionFormStyle}>
+                    <div style={{ fontSize: "12px", color: colors.text.secondary, marginBottom: "6px" }}>
+                      {actionTarget.type === "reject" ? "驳回原因（可选，记入驳回日志）" : "打回重拟原因（可选）"}
+                    </div>
+                    <textarea
+                      value={actionReason}
+                      onChange={(e) => setActionReason(e.target.value)}
+                      rows={2}
+                      placeholder={actionTarget.type === "reject" ? "与本部偏好不符等" : "标题不够准确、摘要待重拟等"}
+                      style={reasonInputStyle}
+                    />
+                    <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+                      <button onClick={confirmAction} disabled={submitting} style={{ ...actionButtonStyle, background: colors.accent.primary }}>
+                        {submitting ? "处理中…" : "确认"}
+                      </button>
+                      <button onClick={() => setActionTarget(null)} disabled={submitting} style={{ ...actionButtonStyle, background: colors.border.medium }}>
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -224,6 +267,28 @@ const miniButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   color: colors.text.muted,
   padding: "4px",
+};
+
+const actionFormStyle: React.CSSProperties = {
+  marginTop: "10px",
+  padding: "10px",
+  background: colors.bg.canvas,
+  border: `1px solid ${colors.border.light}`,
+  borderRadius: "6px",
+};
+
+const reasonInputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "8px",
+  fontFamily: fonts.ui,
+  fontSize: "13px",
+  border: `1px solid ${colors.border.light}`,
+  borderRadius: "6px",
+  background: colors.bg.surface,
+  color: colors.text.primary,
+  boxSizing: "border-box",
+  resize: "vertical",
 };
 
 function noticeStyle(isError: boolean): React.CSSProperties {
