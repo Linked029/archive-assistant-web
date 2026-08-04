@@ -12,7 +12,8 @@ export type AppPane =
   | 'approval'
   | 'sources'
   | 'preferences'
-  | 'review';
+  | 'review'
+  | 'exploration';
 
 interface UiState {
   selectedPane: AppPane;

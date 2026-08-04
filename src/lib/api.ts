@@ -189,6 +189,28 @@ export interface SchedulerRunSummary {
   }[];
 }
 
+
+export interface ApiSearchDirection {
+  id: string;
+  ministry_id: string;
+  direction_text: string;
+  created_at: string;
+  status: "active" | "fulfilled";
+}
+
+export interface ApiExplorationItem {
+  id: string;
+  ministry_id: string;
+  direction_id: string;
+  search_term_id: string | null;
+  title: string;
+  summary: string;
+  full_text: string;
+  source_url: string | null;
+  source_name: string;
+  status: "new" | "archived" | "dismissed";
+  created_at: string;
+}
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   dashboard: () => request<ApiDashboard>("/dashboard"),
@@ -299,5 +321,26 @@ export const api = {
   exportJson: () => requestText("/export/json"),
   importJson: (data: unknown) =>
     request<{ ok: boolean }>("/import/json", { method: "POST", body: JSON.stringify({ data }) }),
+
+  // Exploration scroll
+  createDirection: (ministryId: string, directionText: string) =>
+    request<ApiSearchDirection>("/exploration/directions", { method: "POST", body: JSON.stringify({ ministryId, directionText }) }),
+  listDirections: (ministryId?: string) =>
+    request<ApiSearchDirection[]>(ministryId ? "/exploration/directions?ministryId=" + encodeURIComponent(ministryId) : "/exploration/directions"),
+  runDirection: (directionId: string) =>
+    request<{ directionId: string; terms: string[]; totalResults: number; errors: string[] }>("/exploration/directions/" + directionId + "/run", { method: "POST", body: "{}" }),
+  listExplorationItems: (params?: { ministryId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.ministryId) query.set("ministryId", params.ministryId);
+    if (params?.status) query.set("status", params.status);
+    const suffix = query.toString() ? "?" + query.toString() : "";
+    return request<ApiExplorationItem[]>("/exploration/items" + suffix);
+  },
+  archiveExplorationItem: (id: string) =>
+    request<{ ok: boolean }>("/exploration/items/" + id + "/archive", { method: "POST", body: "{}" }),
+  dismissExplorationItem: (id: string) =>
+    request<{ ok: boolean }>("/exploration/items/" + id + "/dismiss", { method: "POST", body: "{}" }),
+  suggestFixedSources: () =>
+    request<{ sourceName: string; archiveCount: number }[]>("/exploration/suggestions"),
   exportMarkdown: () => requestText("/export/markdown"),
 };

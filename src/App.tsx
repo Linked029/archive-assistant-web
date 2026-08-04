@@ -7,6 +7,7 @@ import { ApprovalPane } from "./ui/screens/ApprovalPane";
 import { SourcesPane } from "./ui/screens/SourcesPane";
 import { PreferencesPane } from "./ui/screens/PreferencesPane";
 import { ReviewPane } from "./ui/screens/ReviewPane";
+import { ExplorationPane } from "./ui/screens/ExplorationPane";
 import { useState } from "react";
 import { AddItemDialog } from "./ui/screens/AddItemDialog";
 import { TopicNameDialog, DeleteConfirmDialog, ClipboardDialog } from "./ui/screens/TopicManagementDialogs";
@@ -114,6 +115,7 @@ function AppShell() {
       {selectedPane === "sources" && <SourcesPane />}
       {selectedPane === "preferences" && <PreferencesPane />}
       {selectedPane === "review" && <ReviewPane />}
+      {selectedPane === "exploration" && <ExplorationPane />}
       {showRightPane && (selectedTopicId
         ? <Suspense fallback={<LazyFallback />}><DetailPane /></Suspense>
         : <Navigate to="/" />)}

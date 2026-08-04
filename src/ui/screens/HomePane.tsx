@@ -1,4 +1,4 @@
-import { Plus, Settings, Pencil, Trash2, Folder, LayoutDashboard, Stamp, Rss, SlidersHorizontal, BookOpen } from "lucide-react";
+import { Plus, Settings, Pencil, Trash2, Folder, LayoutDashboard, Stamp, Rss, SlidersHorizontal, BookOpen, Compass } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PaneContainer, PaneContent } from "../layout/PaneContainer";
 import { PaneHeader } from "../layout/PaneHeader";
@@ -58,6 +58,7 @@ export function HomePane() {
         <NavItem active={selectedPane === "review"} label="复习" badge={dueCount} onClick={() => uiActions.navigateTo("review")} icon={<BookOpen size={14} />} />
         <NavItem active={selectedPane === "sources"} label="信息源" onClick={() => uiActions.navigateTo("sources")} icon={<Rss size={14} />} />
         <NavItem active={selectedPane === "preferences"} label="偏好卡" onClick={() => uiActions.navigateTo("preferences")} icon={<SlidersHorizontal size={14} />} />
+        <NavItem active={selectedPane === "exploration"} label='探索卷宗' onClick={() => uiActions.navigateTo("exploration")} icon={<Compass size={14} />} />
       </div>
       <div style={{ padding: "8px 16px" }}>
         <input

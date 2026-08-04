@@ -24,7 +24,21 @@ export function DashboardPane() {
   };
 
   useEffect(() => {
-    load();
+    // Retry up to 5 times with 1s backoff (server may still be starting)
+    let attempts = 0;
+    const tryLoad = async () => {
+      try {
+        setError(null);
+        const [dash, learning] = await Promise.all([api.dashboard(), api.getLearningStats()]);
+        setDashboard(dash);
+        setStats(learning);
+      } catch {
+        attempts++;
+        if (attempts < 5) setTimeout(tryLoad, 1000);
+        else setError('无法连接本地服务，请确认服务器已启动。');
+      }
+    };
+    tryLoad();
   }, []);
 
   const runAll = async () => {

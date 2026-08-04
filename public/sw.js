@@ -1,4 +1,4 @@
-const CACHE_NAME = "archive-assistant-v2";
+const CACHE_NAME = "archive-assistant-v3";
 const PRECACHE = ["/", "/index.html"];
 
 self.addEventListener("install", (e) => {

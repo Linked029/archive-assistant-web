@@ -186,7 +186,7 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
       // triangular corner ornaments
       const cx = w / 2;
       // top ornament
-      drawOrnament(ctx, cx, 38, 50);
+      drawOrnament(ctx, cx, 44, 50);
       // bottom ornament
       drawOrnament(ctx, cx, h - 38, 50);
 
@@ -194,7 +194,7 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
       ctx.fillStyle = colors.text.ink;
       ctx.font = `bold 26px "Ma Shan Zheng", "KaiTi", "STKaiti", serif`;
       ctx.textAlign = "center";
-      ctx.fillText(item.title, cx, 78);
+      ctx.fillText(item.title, cx, 88);
 
       // red divider
       ctx.strokeStyle = colors.accent.stamp;
@@ -278,7 +278,7 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     drawPage(ctx, page, flipPct);
-  }, [page, flipPct, drawPage]);
+  }, [page, flipPct, drawPage, viewMode]);
 
   /* ---- page animation ---- */
   const animateFlip = (dir: 1 | -1) => {
