@@ -323,6 +323,7 @@ export const api = {
     request<{ ok: boolean }>("/import/json", { method: "POST", body: JSON.stringify({ data }) }),
 
   // Exploration scroll
+  deleteDirection: (id: string) => request<{ ok: boolean }>('/exploration/directions/' + id, { method: 'DELETE' }),
   createDirection: (ministryId: string, directionText: string) =>
     request<ApiSearchDirection>("/exploration/directions", { method: "POST", body: JSON.stringify({ ministryId, directionText }) }),
   listDirections: (ministryId?: string) =>
