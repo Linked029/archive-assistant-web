@@ -31,6 +31,7 @@ interface UiState {
   noticeMessage: string | null;
   isSmartSummarizing: boolean;
   smartSummarizationMessage: string | null;
+  badgeRefreshTick: number;
 
   actions: {
     navigateTo: (pane: AppPane, topicId?: string) => void;
@@ -50,6 +51,7 @@ interface UiState {
     dismissNotice: () => void;
     setSmartSummarizing: (v: boolean) => void;
     setSummarizationMessage: (msg: string | null) => void;
+    refreshBadges: () => void;
     openClipboardDialog: () => void;
     closeClipboardDialog: () => void;
     openReadingItem: (id: string) => void;
@@ -74,6 +76,7 @@ const initial = {
   noticeMessage: null as string | null,
   isSmartSummarizing: false,
   smartSummarizationMessage: null as string | null,
+  badgeRefreshTick: 0,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -96,6 +99,7 @@ export const useUiStore = create<UiState>()((set) => ({
     dismissNotice: () => set({ noticeMessage: null }),
     setSmartSummarizing: (v) => set({ isSmartSummarizing: v }),
     setSummarizationMessage: (msg) => set({ smartSummarizationMessage: msg }),
+    refreshBadges: () => set((state) => ({ badgeRefreshTick: state.badgeRefreshTick + 1 })),
     openClipboardDialog: () => set({ showClipboardDialog: true }),
     closeClipboardDialog: () => set({ showClipboardDialog: false }),
     openReadingItem: (id: string) => set({ readingItemId: id }),

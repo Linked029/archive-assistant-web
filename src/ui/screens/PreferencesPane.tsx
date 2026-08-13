@@ -13,6 +13,8 @@ export function PreferencesPane() {
   const [domains, setDomains] = useState("");
   const [dailyLimit, setDailyLimit] = useState(3);
   const [scheduleCron, setScheduleCron] = useState("0 8 * * *");
+  const [focusRatio, setFocusRatio] = useState(60);
+  const [relevanceThreshold, setRelevanceThreshold] = useState(60);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,17 +41,31 @@ export function PreferencesPane() {
       .catch((e) => setError(e instanceof Error ? e.message : "偏好卡加载失败"));
   }, [selectedMinistryId]);
 
+  useEffect(() => {
+    api.getSettings()
+      .then((s) => {
+        setFocusRatio(s.focusRatio);
+        setRelevanceThreshold(s.relevanceThreshold);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "全局设置加载失败"));
+  }, []);
+
   const save = async () => {
-    if (!pref) return;
     try {
-      const next: Partial<ApiPreference> = {
-        description: description.trim(),
-        excludeKeywords: splitLines(keywords),
-        excludeDomains: splitLines(domains),
-        dailyLimit: Math.max(1, Math.min(10, dailyLimit)),
-        scheduleCron: scheduleCron.trim() || "0 8 * * *",
-      };
-      await api.updatePreference(selectedMinistryId, next);
+      if (pref) {
+        const next: Partial<ApiPreference> = {
+          description: description.trim(),
+          excludeKeywords: splitLines(keywords),
+          excludeDomains: splitLines(domains),
+          dailyLimit: Math.max(1, Math.min(10, dailyLimit)),
+          scheduleCron: scheduleCron.trim() || "0 8 * * *",
+        };
+        await api.updatePreference(selectedMinistryId, next);
+      }
+      await api.updateSourceLifecycle({
+        focusRatio: clampPercent(focusRatio),
+        relevanceThreshold: clampPercent(relevanceThreshold),
+      });
       setMessage("偏好卡已保存");
       setTimeout(() => setMessage(null), 2000);
     } catch (e) {
@@ -82,6 +98,32 @@ export function PreferencesPane() {
 
       {error && <div style={noticeStyle(true)}>{error}</div>}
       {message && <div style={noticeStyle(false)}>{message}</div>}
+
+      <div style={{ ...cardStyle, marginBottom: "14px" }}>
+        <div style={{ fontFamily: fonts.heading, fontSize: "14px", marginBottom: "10px" }}>全局调度</div>
+        <label style={{ fontSize: "13px", color: colors.text.secondary }}>
+          焦点:常驻比例（当前 {focusRatio}:{100 - focusRatio}）
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={focusRatio}
+            onChange={(e) => setFocusRatio(Number(e.target.value))}
+            style={{ display: "block", width: "100%", marginTop: "8px" }}
+          />
+        </label>
+        <label style={{ fontSize: "13px", color: colors.text.secondary, marginTop: "12px", display: "block" }}>
+          焦点源相关性门槛（0-100）
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={relevanceThreshold}
+            onChange={(e) => setRelevanceThreshold(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </label>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <label style={{ fontSize: "13px", color: colors.text.secondary }}>
@@ -119,6 +161,11 @@ function splitLines(text: string): string[] {
     .filter(Boolean);
 }
 
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 60;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
@@ -146,6 +193,13 @@ const saveButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontFamily: fonts.ui,
   fontSize: "13px",
+};
+
+const cardStyle: React.CSSProperties = {
+  padding: "12px",
+  background: colors.bg.surface,
+  border: `1px solid ${colors.border.light}`,
+  borderRadius: "8px",
 };
 
 function noticeStyle(isError: boolean): React.CSSProperties {

@@ -14,6 +14,7 @@ import { api } from "../../lib/api";
 export function HomePane() {
   const { homeSearchQuery, actions: uiActions } = useUiStore();
   const selectedPane = useUiStore((s) => s.selectedPane);
+  const badgeRefreshTick = useUiStore((s) => s.badgeRefreshTick);
   const topics = useTopicStore((s) => s.topics);
   const items = useItemStore((s) => s.items);
   const itemsByTopic = items.length > 0 ? getItemsByTopic(items) : {};
@@ -28,7 +29,7 @@ export function HomePane() {
     api.getLearningStats()
       .then((s) => setDueCount(s.dueToday))
       .catch(() => {});
-  }, []);
+  }, [badgeRefreshTick]);
 
   const searchResults = homeSearchQuery.trim() ? searchItems(items, homeSearchQuery) : [];
   const matchedTopicIds = new Set(searchResults.map((i) => i.topicId));

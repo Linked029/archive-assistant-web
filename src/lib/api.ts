@@ -53,6 +53,20 @@ export interface ApiSource {
   lastFetchedAt: string | null;
   lastStatus: string | null;
   failStreak: number;
+  adapter: string;
+  tags: string[];
+  packIds: string[];
+}
+
+export interface ApiPack {
+  id: string;
+  name: string;
+  state: "active" | "inactive";
+  directionId: string | null;
+  keywords: string[];
+  sourceCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiPreference {
@@ -125,6 +139,8 @@ export interface ApiSettings {
     apiKey: string;
   }[];
   autoApproveThreshold: number;
+  focusRatio: number;
+  relevanceThreshold: number;
 }
 
 export interface ApiDashboard {
@@ -224,11 +240,21 @@ export const api = {
 
   listSources: (ministryId?: string) =>
     request<ApiSource[]>(ministryId ? `/ministries/${ministryId}/sources` : "/sources"),
-  createSource: (ministryId: string, input: { name: string; kind: string; location: string; enabled?: boolean }) =>
+  createSource: (ministryId: string, input: {
+    name: string;
+    kind: string;
+    location: string;
+    enabled?: boolean;
+    adapter?: string;
+    tags?: string[];
+    packIds?: string[];
+  }) =>
     request<ApiSource>(`/ministries/${ministryId}/sources`, { method: "POST", body: JSON.stringify(input) }),
-  updateSource: (id: string, patch: Partial<Pick<ApiSource, "name" | "kind" | "location" | "enabled">>) =>
+  updateSource: (id: string, patch: Partial<Pick<ApiSource, "name" | "kind" | "location" | "enabled" | "adapter" | "tags" | "packIds">>) =>
     request<ApiSource>(`/sources/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
   deleteSource: (id: string) => request<{ ok: boolean }>(`/sources/${id}`, { method: "DELETE" }),
+  batchUpdateSources: (input: { sourceIds: string[]; action: "enable" | "disable" | "addPack" | "removePack"; packId?: string }) =>
+    request<{ ok: boolean; updated: number }>("/sources/batch", { method: "POST", body: JSON.stringify(input) }),
   testSource: (id: string) =>
     request<{ ok: boolean; error: string | null; articleCount: number; preview: { title: string; summary: string }[] }>(
       `/sources/${id}/test`,
@@ -239,6 +265,13 @@ export const api = {
       "/fetch-web",
       { method: "POST", body: JSON.stringify({ url }) },
     ),
+
+  listPacks: () => request<ApiPack[]>("/packs"),
+  createPack: (input: { name: string; keywords?: string[]; state?: "active" | "inactive" }) =>
+    request<ApiPack>("/packs", { method: "POST", body: JSON.stringify(input) }),
+  updatePack: (id: string, patch: Partial<Pick<ApiPack, "name" | "state" | "keywords">>) =>
+    request<ApiPack>(`/packs/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
+  deletePack: (id: string) => request<{ ok: boolean }>(`/packs/${id}`, { method: "DELETE" }),
 
   getPreference: (ministryId: string) => request<ApiPreference>(`/preferences/${ministryId}`),
   updatePreference: (ministryId: string, patch: Partial<ApiPreference>) =>
@@ -306,6 +339,11 @@ export const api = {
     request<{ autoApproveThreshold: number }>("/settings/approval", {
       method: "PUT",
       body: JSON.stringify({ autoApproveThreshold }),
+    }),
+  updateSourceLifecycle: (patch: { focusRatio?: number; relevanceThreshold?: number }) =>
+    request<{ focusRatio: number; relevanceThreshold: number }>("/settings/source-lifecycle", {
+      method: "PUT",
+      body: JSON.stringify(patch),
     }),
 
   classify: (rawText: string, sourceUrl?: string) =>

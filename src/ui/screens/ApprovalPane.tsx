@@ -2,6 +2,7 @@
 import { Check, X, RotateCcw, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { V3Pane } from "../layout/V3Pane";
 import { api, type ApiItem, type ApiMinistry } from "../../lib/api";
+import { useUiStore } from "../../store/ui-store";
 import { colors, fonts } from "../theme/imperial-palette";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
@@ -17,6 +18,7 @@ export function ApprovalPane() {
   const [actionTarget, setActionTarget] = useState<{ itemId: string; type: "reject" | "redraft" } | null>(null);
   const [actionReason, setActionReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const uiActions = useUiStore((s) => s.actions);
 
   const load = async () => {
     try {
@@ -53,7 +55,13 @@ export function ApprovalPane() {
   };
 
   const approve = async (item: ApiItem) => {
-    try { setSubmitting(true); await api.approveItem(item.id); await refresh(); setMessage("已准奏：" + item.title); }
+    try {
+      setSubmitting(true);
+      await api.approveItem(item.id);
+      uiActions.refreshBadges();
+      await refresh();
+      setMessage("已准奏：" + item.title);
+    }
     catch (e) { setError(e instanceof Error ? e.message : "准奏失败"); }
     finally { setSubmitting(false); }
     setTimeout(() => setMessage(null), 2000);
@@ -72,6 +80,7 @@ export function ApprovalPane() {
       const reason = actionReason.trim() || undefined;
       if (type === "reject") await api.rejectItem(itemId, reason);
       else await api.redraftItem(itemId, reason);
+      uiActions.refreshBadges();
       await refresh();
       setActionTarget(null); setActionReason("");
       setMessage(type === "reject" ? "已驳回：" + (target?.title || "") : "已打回重拟：" + (target?.title || ""));
