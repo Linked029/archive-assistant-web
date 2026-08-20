@@ -141,6 +141,8 @@ export interface ApiSettings {
   autoApproveThreshold: number;
   focusRatio: number;
   relevanceThreshold: number;
+  rsshubBaseUrls: string[];
+  wechat2rssBaseUrl: string;
 }
 
 export interface ApiDashboard {
@@ -340,8 +342,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ autoApproveThreshold }),
     }),
-  updateSourceLifecycle: (patch: { focusRatio?: number; relevanceThreshold?: number }) =>
-    request<{ focusRatio: number; relevanceThreshold: number }>("/settings/source-lifecycle", {
+  updateSourceLifecycle: (patch: { focusRatio?: number; relevanceThreshold?: number; rsshubBaseUrls?: string[]; wechat2rssBaseUrl?: string }) =>
+    request<{ focusRatio: number; relevanceThreshold: number; rsshubBaseUrls: string[]; wechat2rssBaseUrl: string }>("/settings/source-lifecycle", {
       method: "PUT",
       body: JSON.stringify(patch),
     }),

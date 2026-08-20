@@ -15,6 +15,8 @@ export function PreferencesPane() {
   const [scheduleCron, setScheduleCron] = useState("0 8 * * *");
   const [focusRatio, setFocusRatio] = useState(60);
   const [relevanceThreshold, setRelevanceThreshold] = useState(60);
+  const [rsshubBaseUrls, setRsshubBaseUrls] = useState("");
+  const [wechat2rssBaseUrl, setWechat2rssBaseUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +48,8 @@ export function PreferencesPane() {
       .then((s) => {
         setFocusRatio(s.focusRatio);
         setRelevanceThreshold(s.relevanceThreshold);
+        setRsshubBaseUrls(s.rsshubBaseUrls.join("\n"));
+        setWechat2rssBaseUrl(s.wechat2rssBaseUrl);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "全局设置加载失败"));
   }, []);
@@ -65,6 +69,8 @@ export function PreferencesPane() {
       await api.updateSourceLifecycle({
         focusRatio: clampPercent(focusRatio),
         relevanceThreshold: clampPercent(relevanceThreshold),
+        rsshubBaseUrls: splitLines(rsshubBaseUrls),
+        wechat2rssBaseUrl: wechat2rssBaseUrl.trim(),
       });
       setMessage("偏好卡已保存");
       setTimeout(() => setMessage(null), 2000);
@@ -123,6 +129,33 @@ export function PreferencesPane() {
             style={inputStyle}
           />
         </label>
+      </div>
+
+      <div style={{ ...cardStyle, marginBottom: "14px" }}>
+        <div style={{ fontFamily: fonts.heading, fontSize: "14px", marginBottom: "10px" }}>公众号订阅</div>
+        <label style={{ fontSize: "13px", color: colors.text.secondary }}>
+          RSSHub 实例地址（每行一个）
+          <textarea
+            value={rsshubBaseUrls}
+            onChange={(e) => setRsshubBaseUrls(e.target.value)}
+            rows={3}
+            style={inputStyle}
+            placeholder={"https://rsshub.example.com"}
+          />
+        </label>
+        <label style={{ fontSize: "13px", color: colors.text.secondary, marginTop: "12px", display: "block" }}>
+          wechat2rss 实例地址（可选）
+          <input
+            type="text"
+            value={wechat2rssBaseUrl}
+            onChange={(e) => setWechat2rssBaseUrl(e.target.value)}
+            style={inputStyle}
+            placeholder="https://wechat2rss.example.com"
+          />
+        </label>
+        <span style={{ fontSize: "11px", color: colors.text.muted, display: "block", marginTop: "4px" }}>
+          配置后，公众号源会先尝试整号订阅，失败自动回退单篇抓取。
+        </span>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
