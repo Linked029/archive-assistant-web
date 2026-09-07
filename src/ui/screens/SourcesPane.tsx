@@ -159,8 +159,11 @@ export function SourcesPane() {
       const result = await api.testSource(source.id);
       setTestResult((prev) => ({
         ...prev,
-        [source.id]: result.ok ? `抓取成功，共 ${result.articleCount} 条` : `失败：${result.error || "未知错误"}`,
+        [source.id]: result.ok
+          ? `抓取成功，共 ${result.articleCount} 条${result.wechatAccountId ? `，公众号账号 ${result.wechatAccountId}` : ""}`
+          : `失败：${result.error || "未知错误"}`,
       }));
+      if (result.wechatAccountId) await reloadSources();
     } catch (e) {
       setTestResult((prev) => ({ ...prev, [source.id]: e instanceof Error ? e.message : "测试失败" }));
     } finally {
@@ -271,13 +274,14 @@ export function SourcesPane() {
   if (filterPack === "resident") filteredSources = filteredSources.filter((s) => s.packIds.length === 0);
   else if (filterPack !== "all") filteredSources = filteredSources.filter((s) => s.packIds.includes(filterPack));
   if (filterAdapter === "wechat") filteredSources = filteredSources.filter((s) => s.adapter === "wechat-account");
+  else if (filterAdapter === "forum") filteredSources = filteredSources.filter((s) => s.adapter.startsWith("discuz-"));
   else if (filterAdapter === "none") filteredSources = filteredSources.filter((s) => !s.adapter);
   if (filterEnabled === "enabled") filteredSources = filteredSources.filter((s) => s.enabled);
   else if (filterEnabled === "disabled") filteredSources = filteredSources.filter((s) => !s.enabled);
   const allVisibleSelected = filteredSources.length > 0 && filteredSources.every((s) => selectedIds.has(s.id));
 
   return (
-    <V3Pane title="中书省 · 源管理" subtitle="全局源池 · 项目包 · 公众号">
+    <V3Pane title="中书省 · 源管理" subtitle="全局源池 · 项目包 · 公众号/论坛">
       <div style={{ ...cardStyle, marginBottom: "14px" }}>
         <div style={{ fontFamily: fonts.heading, fontSize: "14px", marginBottom: "10px" }}>项目包</div>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
@@ -336,6 +340,7 @@ export function SourcesPane() {
         <select value={filterAdapter} onChange={(e) => setFilterAdapter(e.target.value)} style={filterSelect}>
           <option value="all">平台：全部</option>
           <option value="wechat">公众号</option>
+          <option value="forum">论坛</option>
           <option value="none">未标记</option>
         </select>
         <select value={filterEnabled} onChange={(e) => setFilterEnabled(e.target.value)} style={filterSelect}>
@@ -358,6 +363,9 @@ export function SourcesPane() {
           <select value={adapter} onChange={(e) => setAdapter(e.target.value)} style={inputStyle}>
             <option value="">无适配器</option>
             <option value="wechat-account">公众号</option>
+            <option value="discuz-board">Discuz 版块</option>
+            <option value="discuz-thread">Discuz 主题</option>
+            <option value="discuz-user">Discuz 用户主题</option>
           </select>
           <input type="text" value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="领域标签，逗号分隔" style={inputStyle} />
         </div>
@@ -417,6 +425,9 @@ export function SourcesPane() {
                     <select value={editAdapter} onChange={(e) => setEditAdapter(e.target.value)} style={inputStyle}>
                       <option value="">无适配器</option>
                       <option value="wechat-account">公众号</option>
+                      <option value="discuz-board">Discuz 版块</option>
+                      <option value="discuz-thread">Discuz 主题</option>
+                      <option value="discuz-user">Discuz 用户主题</option>
                     </select>
                     <input value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)} placeholder="标签，逗号分隔" style={inputStyle} />
                   </div>
@@ -442,11 +453,17 @@ export function SourcesPane() {
                     <Radio size={15} color={source.enabled ? "#4A7C59" : colors.text.muted} />
                     <span style={{ fontFamily: fonts.body, fontSize: "14px", fontWeight: 600, flex: 1 }}>{source.name}</span>
                     {source.adapter === "wechat-account" && <span style={wechatChip}>公众号</span>}
+                    {source.adapter.startsWith("discuz-") && <span style={forumChip}>{adapterLabel(source.adapter)}</span>}
                     <span style={{ fontSize: "11px", color: colors.text.muted }}>{kindLabel(source.kind)}</span>
                   </div>
                   <div style={{ fontSize: "12px", color: colors.text.muted, overflowWrap: "anywhere" }}>
                     {source.location || "无地址"}
                   </div>
+                  {source.adapter === "wechat-account" && source.wechatAccountId && (
+                    <div style={{ fontSize: "12px", color: "#26845C", overflowWrap: "anywhere" }}>
+                      公众号账号：{source.wechatAccountId}
+                    </div>
+                  )}
                   {(source.tags.length > 0 || source.packIds.length > 0) && (
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                       {source.tags.map((t) => <span key={t} style={tagChip}>{t}</span>)}
@@ -500,6 +517,13 @@ function kindLabel(kind: string): string {
   if (kind === "feed") return "Feed";
   if (kind === "url") return "URL";
   return "手动";
+}
+
+function adapterLabel(adapter: string): string {
+  if (adapter === "discuz-board") return "Discuz 版块";
+  if (adapter === "discuz-thread") return "Discuz 主题";
+  if (adapter === "discuz-user") return "Discuz 用户";
+  return adapter;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -601,6 +625,15 @@ const wechatChip: React.CSSProperties = {
   fontFamily: fonts.ui,
   background: "rgba(38, 132, 92, 0.14)",
   color: "#26845C",
+};
+
+const forumChip: React.CSSProperties = {
+  padding: "2px 7px",
+  borderRadius: "4px",
+  fontSize: "11px",
+  fontFamily: fonts.ui,
+  background: "rgba(90, 107, 122, 0.14)",
+  color: "#5A6B7A",
 };
 
 function noticeStyle(isError: boolean): React.CSSProperties {

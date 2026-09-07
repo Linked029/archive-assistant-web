@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState, lazy, Suspense } from "react";
 import { Check, X, RotateCcw, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { V3Pane } from "../layout/V3Pane";
-import { api, type ApiItem, type ApiMinistry } from "../../lib/api";
+import { api, type ApiItem, type ApiMinistry, type ApiSource } from "../../lib/api";
 import { useUiStore } from "../../store/ui-store";
 import { colors, fonts } from "../theme/imperial-palette";
 
@@ -11,7 +11,10 @@ import remarkGfm from "remark-gfm";
 export function ApprovalPane() {
   const [items, setItems] = useState<ApiItem[]>([]);
   const [ministries, setMinistries] = useState<ApiMinistry[]>([]);
+  const [sources, setSources] = useState<ApiSource[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [ministryFilter, setMinistryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [threshold, setThreshold] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +26,15 @@ export function ApprovalPane() {
   const load = async () => {
     try {
       setError(null);
-      const [itemList, ministryList, settings] = await Promise.all([
+      const [itemList, ministryList, sourceList, settings] = await Promise.all([
         api.listItems({ status: "candidate,pending" }),
         api.listMinistries(),
+        api.listSources(),
         api.getSettings(),
       ]);
       setItems(itemList);
       setMinistries(ministryList);
+      setSources(sourceList);
       setThreshold(settings.autoApproveThreshold);
       // Auto-expand all
       // Keep collapsed initially
@@ -53,6 +58,14 @@ export function ApprovalPane() {
     setItems(list);
     // Keep current state
   };
+
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const visibleItems = items.filter((item) => {
+    if (ministryFilter !== "all" && item.ministryId !== ministryFilter) return false;
+    if (statusFilter === "candidate" && item.status !== "candidate") return false;
+    if (statusFilter === "pending" && item.status !== "pending") return false;
+    return true;
+  });
 
   const approve = async (item: ApiItem) => {
     try {
@@ -113,15 +126,59 @@ export function ApprovalPane() {
         阈值为 0 时全部留待人工批阅。准奏后自动归入六部，可阅读、批注、复习。
       </p>
 
+      <div style={{ display: "flex", gap: "6px", marginBottom: "12px", flexWrap: "wrap" }}>
+        <select
+          value={ministryFilter}
+          onChange={(e) => setMinistryFilter(e.target.value)}
+          style={{
+            padding: "5px 8px",
+            fontSize: "12px",
+            border: `1px solid ${colors.border.light}`,
+            borderRadius: "6px",
+            background: colors.bg.surface,
+            color: colors.text.secondary,
+            fontFamily: fonts.ui,
+          }}
+        >
+          <option value="all">全部六部</option>
+          {ministries.map((ministry) => (
+            <option key={ministry.id} value={ministry.id}>{ministry.title}</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{
+            padding: "5px 8px",
+            fontSize: "12px",
+            border: `1px solid ${colors.border.light}`,
+            borderRadius: "6px",
+            background: colors.bg.surface,
+            color: colors.text.secondary,
+            fontFamily: fonts.ui,
+          }}
+        >
+          <option value="all">拟折 + 打回</option>
+          <option value="candidate">拟折</option>
+          <option value="pending">打回重拟</option>
+        </select>
+        <span style={{ alignSelf: "center", fontSize: "12px", color: colors.text.muted }}>
+          当前 {visibleItems.length} 份
+        </span>
+      </div>
+
       {error && <div style={{ padding: "8px 12px", marginBottom: "12px", borderRadius: "6px", fontSize: "13px", background: colors.accent.light, color: colors.accent.primary }}>{error}</div>}
       {message && <div style={{ padding: "8px 12px", marginBottom: "12px", borderRadius: "6px", fontSize: "13px", background: "rgba(74, 124, 89, 0.12)", color: "#3A6B47" }}>{message}</div>}
 
-      {items.length === 0 && !error ? (
-        <p style={{ color: colors.text.muted, textAlign: "center", marginTop: "48px" }}>门下省无待批奏折</p>
+      {visibleItems.length === 0 && !error ? (
+        <p style={{ color: colors.text.muted, textAlign: "center", marginTop: "48px" }}>
+          {items.length === 0 ? "门下省无待批奏折" : "当前筛选下无待批奏折"}
+        </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const ministry = ministries.find((m) => m.id === item.ministryId);
+            const source = item.sourceId ? sourceById.get(item.sourceId) : undefined;
             const expanded = expandedIds.has(item.id);
             return (
               <div key={item.id} style={{ padding: "16px", background: colors.bg.surface, border: "1px solid " + colors.border.light, borderRadius: "8px" }}>
@@ -134,6 +191,22 @@ export function ApprovalPane() {
                     {item.status === "pending" ? "打回重拟" : "拟折"} · 质量 {item.qualityScore}
                   </span>
                   {item.redraftCount > 0 && <span style={{ fontSize: "11px", color: colors.accent.primary }}>已打回 {item.redraftCount} 次</span>}
+                  {source && (
+                    <span style={{
+                      maxWidth: "180px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "11px",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                      background: "rgba(90, 107, 122, 0.14)",
+                      color: "#5A6B7A",
+                      fontFamily: fonts.ui,
+                    }}>
+                      {source.name}
+                    </span>
+                  )}
                   <span style={{ flex: 1 }} />
                   <button onClick={() => toggle(item.id)}
                     style={{ display: "flex", alignItems: "center", gap: "4px", background: "none", border: "none", cursor: "pointer", color: colors.text.muted, fontFamily: fonts.ui, fontSize: "12px", padding: "4px 8px", borderRadius: "4px" }}>

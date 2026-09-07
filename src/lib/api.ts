@@ -56,6 +56,7 @@ export interface ApiSource {
   adapter: string;
   tags: string[];
   packIds: string[];
+  wechatAccountId: string;
 }
 
 export interface ApiPack {
@@ -250,15 +251,16 @@ export const api = {
     adapter?: string;
     tags?: string[];
     packIds?: string[];
+    wechatAccountId?: string;
   }) =>
     request<ApiSource>(`/ministries/${ministryId}/sources`, { method: "POST", body: JSON.stringify(input) }),
-  updateSource: (id: string, patch: Partial<Pick<ApiSource, "name" | "kind" | "location" | "enabled" | "adapter" | "tags" | "packIds">>) =>
+  updateSource: (id: string, patch: Partial<Pick<ApiSource, "name" | "kind" | "location" | "enabled" | "adapter" | "tags" | "packIds" | "wechatAccountId">>) =>
     request<ApiSource>(`/sources/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
   deleteSource: (id: string) => request<{ ok: boolean }>(`/sources/${id}`, { method: "DELETE" }),
   batchUpdateSources: (input: { sourceIds: string[]; action: "enable" | "disable" | "addPack" | "removePack"; packId?: string }) =>
     request<{ ok: boolean; updated: number }>("/sources/batch", { method: "POST", body: JSON.stringify(input) }),
   testSource: (id: string) =>
-    request<{ ok: boolean; error: string | null; articleCount: number; preview: { title: string; summary: string }[] }>(
+    request<{ ok: boolean; error: string | null; articleCount: number; wechatAccountId: string | null; preview: { title: string; summary: string }[] }>(
       `/sources/${id}/test`,
       { method: "POST" },
     ),

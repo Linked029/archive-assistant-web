@@ -1,5 +1,5 @@
 ﻿import { useRef, useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
-import { Stamp, X, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Stamp, X, ChevronLeft, ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
 import type { KnowledgeItem } from "../../models/item";
 import { colors, fonts } from "../theme/imperial-palette";
 import { api, type ApiAnnotation, type ApiItemStatus } from "../../lib/api";
@@ -120,8 +120,12 @@ function drawOrnament(ctx: CanvasRenderingContext2D, cx: number, y: number, w: n
 
 export function MemorialReader({ item, onClose }: MemorialReaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const flipBaseCanvasRef = useRef<HTMLCanvasElement>(null);
+  const animatingRef = useRef(false);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [page, setPage] = useState(0);
-  const [flipPct, setFlipPct] = useState(0);
+  const [flipDir, setFlipDir] = useState<1 | -1>(1);
+  const [flipTarget, setFlipTarget] = useState<number | null>(null);
   const [animating, setAnimating] = useState(false);
   const [viewMode, setViewMode] = useState<"canvas" | "markdown">("canvas");
   const [fontSize, setFontSize] = useState(16);
@@ -190,18 +194,24 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
       // bottom ornament
       drawOrnament(ctx, cx, h - 38, 50);
 
-      // title
+      // Title with safe wrapping inside the paper frame
       ctx.fillStyle = colors.text.ink;
-      ctx.font = `bold 26px "Ma Shan Zheng", "KaiTi", "STKaiti", serif`;
+      ctx.font = `bold 22px "Ma Shan Zheng", "KaiTi", "STKaiti", serif`;
       ctx.textAlign = "center";
-      ctx.fillText(item.title, cx, 88);
+      const titleLines = breakLines(ctx, item.title, TEXT_W - 12).slice(0, 7);
+      let titleY = 84 + Math.max(0, (5 - titleLines.length) * 5);
+      for (const line of titleLines) {
+        ctx.fillText(line, cx, titleY);
+        titleY += 30;
+      }
 
-      // red divider
+      // red divider below wrapped title
+      const dividerY = titleY + 8;
       ctx.strokeStyle = colors.accent.stamp;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(cx - 70, 96);
-      ctx.lineTo(cx + 70, 96);
+      ctx.moveTo(cx - 70, dividerY);
+      ctx.lineTo(cx + 70, dividerY);
       ctx.stroke();
 
       // metadata
@@ -210,9 +220,12 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
       const dateStr = new Date(item.createdAtEpochMillis).toLocaleDateString("zh-CN", {
         year: "numeric", month: "long", day: "numeric"
       });
-      ctx.fillText(dateStr, cx, 118);
+      const metaY = dividerY + 24;
+      ctx.fillText(dateStr, cx, metaY);
+      let summaryStartY = metaY + 42;
       if (item.fileName) {
-        ctx.fillText('来源：' + item.fileName, cx, 140);
+        ctx.fillText('来源：' + item.fileName, cx, metaY + 22);
+        summaryStartY += 26;
       }
 
       // summary on cover
@@ -221,7 +234,7 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
         ctx.font = `16px "Dinglie Song", "Noto Serif SC", "SimSun", serif`;
         ctx.textAlign = "left";
         const lines = breakLines(ctx, item.summary, TEXT_W);
-        let sy = 170;
+        let sy = Math.max(summaryStartY, 184);
         for (const l of lines.slice(0, 4)) {
           ctx.fillText(l, MARGIN_X, sy);
           sy += LINE_H;
@@ -277,32 +290,40 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    drawPage(ctx, page, flipPct);
-  }, [page, flipPct, drawPage, viewMode]);
+    drawPage(ctx, page, 0);
+  }, [page, drawPage, viewMode]);
+
+  useEffect(() => {
+    if (flipTarget === null) return;
+    const canvas = flipBaseCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    drawPage(ctx, flipTarget, 0);
+  }, [flipTarget, drawPage]);
 
   /* ---- page animation ---- */
+  const finishFlip = (targetPage: number) => {
+    if (!animatingRef.current) return;
+    animatingRef.current = false;
+    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    finishTimerRef.current = null;
+    setAnimating(false);
+    setFlipTarget(null);
+    setPage(targetPage);
+  };
+
   const animateFlip = (dir: 1 | -1) => {
-    if (animating) return;
+    if (animatingRef.current) return;
     if (dir === 1 && page >= totalPages - 1) return;
     if (dir === -1 && page <= 0) return;
+    const targetPage = page + dir;
+    animatingRef.current = true;
     setAnimating(true);
-    const start = performance.now();
-    const duration = 280;
-    const anim = (now: number) => {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      // ease-out
-      const eased = 1 - Math.pow(1 - t, 2.5);
-      setFlipPct(eased * 100);
-      if (t < 1) {
-        requestAnimationFrame(anim);
-      } else {
-        setFlipPct(0);
-        setPage((p) => p + dir);
-        setAnimating(false);
-      }
-    };
-    requestAnimationFrame(anim);
+    setFlipDir(dir);
+    setFlipTarget(targetPage);
+    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    finishTimerRef.current = setTimeout(() => finishFlip(targetPage), 760);
   };
 
   const handleStamp = () => {
@@ -322,6 +343,12 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [page, animating]);
+
+  useEffect(() => {
+    return () => {
+      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -363,14 +390,24 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
   };
 
   const isRead = itemStatus === "read" || itemStatus === "reviewing" || itemStatus === "mastered";
+  const pageFlipEase = "720ms cubic-bezier(0.25, 1, 0.35, 1) both";
+  const frontFlipName = flipDir === 1
+    ? "memorial-page-front-next"
+    : "memorial-page-front-back";
+  const baseFlipName = flipDir === 1
+    ? "memorial-page-base-next"
+    : "memorial-page-base-back";
 
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      display: "flex", flexDirection: "row", gap: "16px",
-      alignItems: "center", justifyContent: "center",
+      display: "flex", flexDirection: "row", flexWrap: "wrap", gap: "16px",
+      alignItems: "center", justifyContent: "center", alignContent: "flex-start",
       background: "rgba(20,15,10,0.65)",
       fontFamily: fonts.ui,
+      padding: "16px",
+      overflowY: "auto",
+      boxSizing: "border-box",
     }}>
       <div style={{
         background: "#E8DDC8",
@@ -378,6 +415,8 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
         boxShadow: "0 12px 60px rgba(20,15,10,0.5), 0 0 0 1px rgba(20,15,10,0.1)",
         padding: "28px 24px 20px",
         position: "relative",
+        flexShrink: 0,
+        maxWidth: "100%",
       }}>
         {/* Toolbar */}
         <div style={{ display: "flex", gap: "6px", marginBottom: "14px", justifyContent: "center", alignItems: "center" }}>
@@ -406,6 +445,7 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
           <Suspense fallback={<div style={{ width: PAGE_W, height: PAGE_H, display: "flex", alignItems: "center", justifyContent: "center", color: colors.text.muted }}>加载中...</div>}>
             <div style={{
               width: PAGE_W, height: PAGE_H, overflow: "auto",
+              maxWidth: "100%",
               padding: "28px", boxSizing: "border-box",
               fontFamily: fonts.body, fontSize: `${fontSize}px`, lineHeight: "1.9",
               color: colors.text.primary, background: colors.bg.canvas,
@@ -447,17 +487,54 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
 
         {/* Canvas view */}
         {viewMode === "canvas" && (
-        <canvas
-          ref={canvasRef}
-          width={PAGE_W}
-          height={PAGE_H}
-          style={{ display: "block", borderRadius: "2px" }}
-          onClick={(e) => {
-            const x = e.clientX - (e.target as HTMLCanvasElement).getBoundingClientRect().left;
-            if (x > PAGE_W * 0.55) animateFlip(1);
-            else animateFlip(-1);
-          }}
-        />
+          <div style={{ position: "relative", width: "100%", maxWidth: PAGE_W, margin: "0 auto" }}>
+            <canvas
+              ref={flipBaseCanvasRef}
+              width={PAGE_W}
+              height={PAGE_H}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "block",
+                width: "100%",
+                height: "auto",
+                borderRadius: "2px",
+                opacity: animating ? undefined : 0,
+                animation: animating ? `${baseFlipName} ${pageFlipEase}` : "none",
+                zIndex: 1,
+                willChange: animating ? "opacity" : "auto",
+              }}
+            />
+            <canvas
+              ref={canvasRef}
+              width={PAGE_W}
+              height={PAGE_H}
+              style={{
+                display: "block",
+                position: "relative",
+                zIndex: 2,
+                borderRadius: "2px",
+                maxWidth: "100%",
+                height: "auto",
+                transform: animating ? undefined : "none",
+                transformOrigin: flipDir === 1 ? "left center" : "right center",
+                backfaceVisibility: "visible",
+                opacity: animating ? undefined : 1,
+                animation: animating ? `${frontFlipName} ${pageFlipEase}` : "none",
+                boxShadow: animating ? "0 18px 34px rgba(20,15,10,0.28)" : "none",
+                willChange: animating ? "transform, opacity" : "auto",
+              }}
+              onAnimationEnd={() => {
+                if (flipTarget !== null) finishFlip(flipTarget);
+              }}
+              onClick={(e) => {
+                const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                const x = (e.clientX - rect.left) / (rect.width || 1) * PAGE_W;
+                if (x > PAGE_W * 0.55) animateFlip(1);
+                else animateFlip(-1);
+              }}
+            />
+          </div>
         )}
 
         {/* Bottom nav */}
@@ -507,10 +584,31 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
         padding: "14px",
         boxSizing: "border-box",
         boxShadow: "0 12px 60px rgba(20,15,10,0.5), 0 0 0 1px rgba(20,15,10,0.1)",
+        flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ fontFamily: fonts.heading, fontSize: "15px", color: colors.text.primary }}>批注 · 批红</span>
-          <span style={{ fontSize: "11px", color: isRead ? "#3A6B47" : colors.text.muted }}>{isRead ? "已读" : "未读"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {item.sourceUrl && (
+              <a
+                href={item.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "#4A7C59",
+                  textDecoration: "none",
+                }}
+              >
+                原文 <ExternalLink size={11} />
+              </a>
+            )}
+            <span style={{ fontSize: "11px", color: isRead ? "#3A6B47" : colors.text.muted }}>{isRead ? "已读" : "未读"}</span>
+          </div>
         </div>
         <button
           onClick={markRead}

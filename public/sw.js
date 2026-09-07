@@ -1,4 +1,4 @@
-const CACHE_NAME = "archive-assistant-v3";
+const CACHE_NAME = "archive-assistant-v5";
 const PRECACHE = ["/", "/index.html"];
 
 self.addEventListener("install", (e) => {
@@ -31,6 +31,20 @@ self.addEventListener("fetch", (e) => {
           return res;
         })
         .catch(() => caches.match(e.request).then((cached) => cached || caches.match("/")))
+    );
+    return;
+  }
+  if (e.request.url.includes("/assets/")) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
     );
     return;
   }
