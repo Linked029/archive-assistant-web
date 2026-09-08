@@ -1,5 +1,6 @@
 ﻿import { useRef, useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Stamp, X, ChevronLeft, ChevronRight, Plus, Trash2, ExternalLink } from "lucide-react";
+import { PageFlip } from "page-flip";
 import type { KnowledgeItem } from "../../models/item";
 import { colors, fonts } from "../theme/imperial-palette";
 import { api, type ApiAnnotation, type ApiItemStatus } from "../../lib/api";
@@ -119,14 +120,10 @@ function drawOrnament(ctx: CanvasRenderingContext2D, cx: number, y: number, w: n
 }
 
 export function MemorialReader({ item, onClose }: MemorialReaderProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const flipBaseCanvasRef = useRef<HTMLCanvasElement>(null);
-  const animatingRef = useRef(false);
-  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bookRef = useRef<HTMLDivElement>(null);
+  const flipRef = useRef<PageFlip | null>(null);
   const [page, setPage] = useState(0);
-  const [flipDir, setFlipDir] = useState<1 | -1>(1);
-  const [flipTarget, setFlipTarget] = useState<number | null>(null);
-  const [animating, setAnimating] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
   const [viewMode, setViewMode] = useState<"canvas" | "markdown">("canvas");
   const [fontSize, setFontSize] = useState(16);
   const [stampPhase, setStampPhase] = useState<"hidden" | "pressing" | "fading" | "visible">("hidden");
@@ -285,70 +282,81 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
     ctx.restore();
   }, [item, pages, totalPages, fontSize, stampPhase, paper]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    drawPage(ctx, page, 0);
-  }, [page, drawPage, viewMode]);
+  const renderPageDataUrl = useCallback((pageIdx: number): string => {
+    const off = document.createElement('canvas');
+    off.width = PAGE_W;
+    off.height = PAGE_H;
+    const ctx = off.getContext('2d');
+    if (!ctx) return '';
+    drawPage(ctx, pageIdx, 0);
+    return off.toDataURL('image/png');
+  }, [drawPage]);
 
   useEffect(() => {
-    if (flipTarget === null) return;
-    const canvas = flipBaseCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    drawPage(ctx, flipTarget, 0);
-  }, [flipTarget, drawPage]);
+    const host = bookRef.current;
+    if (!host || viewMode !== 'canvas') return;
+    let cancelled = false;
+    let flip: PageFlip | null = null;
+    const init = () => {
+      if (cancelled) return;
+      // Build page images with the existing cover/content drawing.
+      const images: string[] = [];
+      for (let i = 0; i < totalPages; i++) images.push(renderPageDataUrl(i));
+      host.innerHTML = '';
+      flip = new PageFlip(host, {
+        width: PAGE_W,
+        height: PAGE_H,
+        size: 'stretch',
+        minWidth: 360,
+        maxWidth: 520,
+        minHeight: 500,
+        maxHeight: 760,
+        drawShadow: true,
+        flippingTime: 1400,
+        usePortrait: true,
+        showCover: false,
+        maxShadowOpacity: 0.3,
+        mobileScrollSupport: false,
+        disableFlipByClick: false,
+        clickEventForward: true,
+      });
+      flip.loadFromImages(images);
+      flip.on('flip', (e) => setPage(Number(e.data)));
+      flip.on('changeState', (e) => setIsFlipping(e.data === 'flipping' || e.data === 'user_fold'));
+      flipRef.current = flip;
+    };
+    // Wait one frame so the outer card has its laid-out width.
+    const raf = requestAnimationFrame(() => requestAnimationFrame(init));
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      flip?.destroy();
+      flipRef.current = null;
+      host.innerHTML = '';
+    };
+  }, [renderPageDataUrl, totalPages, viewMode]);
 
-  /* ---- page animation ---- */
-  const finishFlip = (targetPage: number) => {
-    if (!animatingRef.current) return;
-    animatingRef.current = false;
-    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
-    finishTimerRef.current = null;
-    setAnimating(false);
-    setFlipTarget(null);
-    setPage(targetPage);
-  };
-
-  const animateFlip = (dir: 1 | -1) => {
-    if (animatingRef.current) return;
-    if (dir === 1 && page >= totalPages - 1) return;
-    if (dir === -1 && page <= 0) return;
-    const targetPage = page + dir;
-    animatingRef.current = true;
-    setAnimating(true);
-    setFlipDir(dir);
-    setFlipTarget(targetPage);
-    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
-    finishTimerRef.current = setTimeout(() => finishFlip(targetPage), 760);
-  };
+  const goNext = () => flipRef.current?.flipNext('top');
+  const goPrev = () => flipRef.current?.flipPrev('top');
 
   const handleStamp = () => {
-    setStampPhase("pressing");
-    setTimeout(() => setStampPhase("visible"), 150);
-    setTimeout(() => setStampPhase("fading"), 2500);
-    setTimeout(() => setStampPhase("hidden"), 3200);
+    setStampPhase('pressing');
+    setTimeout(() => setStampPhase('visible'), 150);
+    setTimeout(() => setStampPhase('fading'), 2500);
+    setTimeout(() => setStampPhase('hidden'), 3200);
   };
 
   /* ---- keyboard ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") animateFlip(1);
-      else if (e.key === "ArrowLeft") animateFlip(-1);
+      if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") goPrev();
       else if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [page, animating]);
+  }, [goNext, goPrev]);
 
-  useEffect(() => {
-    return () => {
-      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -390,13 +398,6 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
   };
 
   const isRead = itemStatus === "read" || itemStatus === "reviewing" || itemStatus === "mastered";
-  const pageFlipEase = "720ms cubic-bezier(0.25, 1, 0.35, 1) both";
-  const frontFlipName = flipDir === 1
-    ? "memorial-page-front-next"
-    : "memorial-page-front-back";
-  const baseFlipName = flipDir === 1
-    ? "memorial-page-base-next"
-    : "memorial-page-base-back";
 
   return (
     <div style={{
@@ -413,10 +414,13 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
         background: "#E8DDC8",
         borderRadius: "6px",
         boxShadow: "0 12px 60px rgba(20,15,10,0.5), 0 0 0 1px rgba(20,15,10,0.1)",
-        padding: "28px 24px 20px",
+        padding: "22px 14px 18px",
         position: "relative",
         flexShrink: 0,
-        maxWidth: "100%",
+        flexGrow: 0,
+        minWidth: 0,
+        maxWidth: 520,
+        width: "min(62vw, 520px)",
       }}>
         {/* Toolbar */}
         <div style={{ display: "flex", gap: "6px", marginBottom: "14px", justifyContent: "center", alignItems: "center" }}>
@@ -485,74 +489,28 @@ export function MemorialReader({ item, onClose }: MemorialReaderProps) {
           </Suspense>
         )}
 
-        {/* Canvas view */}
+        {/* Canvas view (StPageFlip realistic book) */}
         {viewMode === "canvas" && (
           <div style={{ position: "relative", width: "100%", maxWidth: PAGE_W, margin: "0 auto" }}>
-            <canvas
-              ref={flipBaseCanvasRef}
-              width={PAGE_W}
-              height={PAGE_H}
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "block",
-                width: "100%",
-                height: "auto",
-                borderRadius: "2px",
-                opacity: animating ? undefined : 0,
-                animation: animating ? `${baseFlipName} ${pageFlipEase}` : "none",
-                zIndex: 1,
-                willChange: animating ? "opacity" : "auto",
-              }}
-            />
-            <canvas
-              ref={canvasRef}
-              width={PAGE_W}
-              height={PAGE_H}
-              style={{
-                display: "block",
-                position: "relative",
-                zIndex: 2,
-                borderRadius: "2px",
-                maxWidth: "100%",
-                height: "auto",
-                transform: animating ? undefined : "none",
-                transformOrigin: flipDir === 1 ? "left center" : "right center",
-                backfaceVisibility: "visible",
-                opacity: animating ? undefined : 1,
-                animation: animating ? `${frontFlipName} ${pageFlipEase}` : "none",
-                boxShadow: animating ? "0 18px 34px rgba(20,15,10,0.28)" : "none",
-                willChange: animating ? "transform, opacity" : "auto",
-              }}
-              onAnimationEnd={() => {
-                if (flipTarget !== null) finishFlip(flipTarget);
-              }}
-              onClick={(e) => {
-                const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-                const x = (e.clientX - rect.left) / (rect.width || 1) * PAGE_W;
-                if (x > PAGE_W * 0.55) animateFlip(1);
-                else animateFlip(-1);
-              }}
-            />
+            <div ref={bookRef} style={{ width: "100%", maxWidth: 520, margin: "0 auto" }} />
           </div>
         )}
 
-        {/* Bottom nav */}
+                {/* Bottom nav */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginTop: "18px" }}>
-          <button onClick={() => animateFlip(-1)} disabled={page === 0 || animating}
+          <button onClick={goPrev} disabled={page === 0 || isFlipping}
             style={{ ...navBtn, opacity: page === 0 ? 0.25 : 1 }}>
-            <ChevronLeft size={15} /> 前页
-          </button>
+            <ChevronLeft size={15} /> 上一页</button>
           <span style={{ fontSize: "13px", color: colors.text.secondary, fontFamily: fonts.ui, minWidth: "80px", textAlign: "center" }}>
             第 {page + 1} / {totalPages} 页
           </span>
-          <button onClick={() => animateFlip(1)} disabled={page >= totalPages - 1 || animating}
+          <button onClick={goNext} disabled={page >= totalPages - 1 || isFlipping}
             style={{ ...navBtn, opacity: page >= totalPages - 1 ? 0.25 : 1 }}>
-            后页 <ChevronRight size={15} />
+            下一页 <ChevronRight size={15} />
           </button>
         </div>
 
-        {/* Stamp button (bottom-right corner) */}
+                {/* Stamp button (bottom-right corner) */}
         <div onClick={handleStamp} style={{
           position: "absolute", bottom: "44px", right: "32px",
           width: "42px", height: "42px", borderRadius: "50%",

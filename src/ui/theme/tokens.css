@@ -130,26 +130,3 @@ html.dark th { background: var(--color-surface); }
 html.dark select { background: var(--color-surface); color: var(--color-text-primary); }
 html.dark input, html.dark textarea { background: var(--color-surface); color: var(--color-text-primary); border-color: var(--color-border-medium); }
 
-@keyframes memorial-page-front-next {
-  0% { transform: perspective(1100px) rotateY(0deg); opacity: 1; }
-  35% { opacity: 1; }
-  72% { transform: perspective(1100px) rotateY(-135deg); opacity: 0; }
-  100% { transform: perspective(1100px) rotateY(-135deg); opacity: 0; }
-}
-
-@keyframes memorial-page-front-back {
-  0% { transform: perspective(1100px) rotateY(0deg); opacity: 1; }
-  35% { opacity: 1; }
-  72% { transform: perspective(1100px) rotateY(135deg); opacity: 0; }
-  100% { transform: perspective(1100px) rotateY(135deg); opacity: 0; }
-}
-
-@keyframes memorial-page-base-next {
-  0%, 35% { opacity: 0; }
-  72%, 100% { opacity: 1; }
-}
-
-@keyframes memorial-page-base-back {
-  0%, 35% { opacity: 0; }
-  72%, 100% { opacity: 1; }
-}
